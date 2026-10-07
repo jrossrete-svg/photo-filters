@@ -1,0 +1,45 @@
+name: photo_filters
+description: "Offline photo effects editor. Independent app, not affiliated with Snap Inc."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.47.5"
+
+# Exact versions are pinned on purpose (offline/privacy audit, see README).
+dependencies:
+  flutter:
+    sdk: flutter
+  image: 4.10.1
+  image_picker: 1.2.4
+  face_detection_tflite: 6.10.1
+  gal: 2.3.3
+  path_provider: 2.1.6
+  file_selector: 1.1.0
+  web: 1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/licenses/
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
+
+# Required by face_detection_tflite's OpenCV dependency for iOS builds on recent Xcode.
+hooks:
+  user_defines:
+    dartcv4:
+      ios:
+        deployment_target: '15.0'

@@ -1,0 +1,193 @@
+// End-to-end test of the built web app in a phone-sized headless browser.
+//   NODE_PATH=<dir with playwright> node tool/e2e/web_e2e.cjs <url> <photo> <outDir> [chromium|webkit]
+const { chromium, webkit, devices } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+
+const [url, photo, outDir, engine = 'chromium'] = process.argv.slice(2);
+const FILTERS = ['Sunny Effect', 'Soft Freckles', 'Neon Lines', 'Light', 'Rosy Haze', 'SERUM', 'Glow Effect with Makeup'];
+fs.mkdirSync(outDir, { recursive: true });
+const results = { engine, url, steps: [], filters: {}, requests: [], foreignRequests: [], consoleErrors: [] };
+const log = (m) => { console.log(m); results.steps.push(m); };
+
+async function enableSemantics(page) {
+  await page.waitForSelector('flutter-view, flt-glass-pane', { timeout: 90000 });
+  const ph = page.locator('flt-semantics-placeholder');
+  await ph.waitFor({ state: 'attached', timeout: 30000 });
+  await ph.evaluate((el) => el.click());
+}
+
+
+// Taps a filter card, scrolling the horizontal filter bar (mouse wheel) until
+// the card is on screen, then confirms the card is marked as selected.
+async function selectFilter(page, name) {
+  const btn = page.getByRole('button', { name: new RegExp('^' + name.replace(/[()]/g, '.')) }).first();
+  const vw = page.viewportSize().width;
+  for (let k = 0; k < 20; k++) {
+    const box = await btn.boundingBox();
+    if (box && box.x >= 0 && box.x + box.width <= vw) break;
+    const y = box ? box.y + box.height / 2 : page.viewportSize().height - 70;
+    await page.mouse.move(vw / 2, y);
+    await page.mouse.wheel(box && box.x < 0 ? -150 : 150, 0);
+    await page.waitForTimeout(250);
+  }
+  await btn.click({ force: true });
+  await page.waitForFunction((n) => [...document.querySelectorAll('flt-semantics[role=button]')]
+    .some((e) => e.textContent.startsWith(n) && e.getAttribute('aria-current') === 'true'), name, { timeout: 10000 });
+}
+
+async function waitReady(page, timeout = 180000) {
+  await page.getByText('Rendering preview').first().waitFor({ state: 'attached', timeout: 1500 }).catch(() => {});
+  await page.getByText('Preview ready').first().waitFor({ state: 'attached', timeout });
+}
+
+(async () => {
+  const browserType = engine === 'webkit' ? webkit : chromium;
+  const browser = await browserType.launch({
+    args: engine === 'chromium' ? ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] : [],
+  });
+  const iphone = devices['iPhone 13'];
+  const context = await browser.newContext({
+    viewport: iphone.viewport,
+    deviceScaleFactor: 2,
+    hasTouch: true,
+    isMobile: engine === 'chromium',
+    acceptDownloads: true,
+  });
+  const origin = new URL(url).origin;
+  // Block (and record) anything that is not this site, so a regression can
+  // never leak data during the test; the assertion below requires zero.
+  await context.route('**/*', (route) => {
+    const u = route.request().url();
+    if (u.startsWith(origin) || u.startsWith('blob:') || u.startsWith('data:')) return route.continue();
+    results.blocked = (results.blocked || []).concat(u);
+    return route.abort();
+  });
+  await context.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) =>
+      console.error('CSP violation: ' + e.violatedDirective + ' ' + e.blockedURI));
+  });
+  context.on('request', (r) => {
+    const u = r.url();
+    results.requests.push(u);
+    if (!u.startsWith(origin) && !u.startsWith('blob:') && !u.startsWith('data:')) results.foreignRequests.push(u);
+  });
+  const page = await context.newPage();
+  page.on('console', (m) => { if (m.type() === 'error') results.consoleErrors.push(m.text()); });
+  page.on('pageerror', (e) => results.consoleErrors.push('pageerror: ' + e.message));
+
+  let t0 = Date.now();
+  await page.goto(url, { waitUntil: 'load' });
+  await enableSemantics(page);
+  const choose = page.getByRole('button', { name: /Choose photo/ });
+  await choose.waitFor({ timeout: 90000 });
+  log(`home loaded in ${Date.now() - t0} ms`);
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: path.join(outDir, `${engine}-01-home.png`) });
+
+  // Service worker should be installed and controlling after first load.
+  const sw = await page.evaluate(async () => {
+    const reg = await navigator.serviceWorker.ready;
+    await new Promise((r) => setTimeout(r, 500));
+    const keys = await caches.keys();
+    let n = 0;
+    for (const k of keys) n += (await (await caches.open(k)).keys()).length;
+    return { scope: reg.scope, active: !!reg.active, caches: keys, cachedEntries: n };
+  });
+  log(`service worker: ${JSON.stringify(sw)}`);
+  results.serviceWorker = sw;
+
+  async function pickAndOpen(tag) {
+    t0 = Date.now();
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 30000 }), choose.click()]);
+    await chooser.setFiles(photo);
+    await waitReady(page);
+    const faces = await page.getByText(/face found|faces found|No face found|unavailable/).first().textContent().catch(() => '?');
+    log(`${tag}: photo opened + first preview in ${Date.now() - t0} ms; status: ${faces}`);
+    return faces;
+  }
+
+  results.faceStatus = await pickAndOpen('online');
+  for (const [i, name] of FILTERS.entries()) {
+    t0 = Date.now();
+    if (i > 0) await selectFilter(page, name);
+    await waitReady(page);
+    const ms = Date.now() - t0;
+    await page.waitForTimeout(300);
+    const shot = path.join(outDir, `${engine}-02-filter-${i + 1}-${name.replace(/\W+/g, '_')}.png`);
+    await page.screenshot({ path: shot });
+    results.filters[name] = { ms, screenshot: shot };
+    log(`filter "${name}" rendered in ${ms} ms`);
+  }
+
+  // Before/after: drag the divider to the middle.
+  const box = await page.getByText('Preview ready').first().boundingBox();
+  if (box) {
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(outDir, `${engine}-03-before-after.png`) });
+  }
+
+  // Save the current filter as a new full-size JPEG (no share sheet).
+  t0 = Date.now();
+  await page.getByRole('button', { name: /^Save/ }).first().click({ force: true });
+  await page.waitForSelector('#save-overlay img', { timeout: 180000 });
+  await page.waitForFunction(() => document.querySelector('#save-overlay img').complete);
+  const overlay = await page.evaluate(() => {
+    const img = document.querySelector('#save-overlay img');
+    return { hint: document.querySelector('#save-overlay div').textContent, w: img.naturalWidth, h: img.naturalHeight,
+             src: img.src.slice(0, 5), shareApiUsed: false };
+  });
+  log(`save view shown in ${Date.now() - t0} ms: ${JSON.stringify(overlay)}`);
+  results.saveOverlay = overlay;
+  await page.screenshot({ path: path.join(outDir, `${engine}-04-save-view.png`) });
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60000 }).catch(() => null),
+    page.locator('#save-overlay a[download]').click(),
+  ]);
+  if (download) {
+    const p = path.join(outDir, `${engine}-export-${download.suggestedFilename()}`);
+    await download.saveAs(p);
+    results.exportFile = p;
+    log(`download saved: ${p} (${fs.statSync(p).size} bytes)`);
+  } else {
+    log('download: no download event');
+  }
+  await page.locator('#save-overlay button').click();
+  await page.waitForTimeout(500);
+
+  // Offline: reload with the network cut and use the app again.
+  // OFFLINE_CMD (optional) cuts the network for real, e.g. by stopping the
+  // local server; Playwright's WebKit cannot emulate offline with a service worker.
+  if (process.env.OFFLINE_CMD) {
+    require('child_process').execSync(process.env.OFFLINE_CMD, { stdio: 'inherit' });
+    log(`network cut with: ${process.env.OFFLINE_CMD}`);
+  } else {
+    await context.setOffline(true);
+  }
+  const before = results.requests.length;
+  t0 = Date.now();
+  await page.reload({ waitUntil: 'load' });
+  await enableSemantics(page);
+  await choose.waitFor({ timeout: 90000 });
+  log(`OFFLINE reload: app shell loaded in ${Date.now() - t0} ms`);
+  await page.screenshot({ path: path.join(outDir, `${engine}-05-offline-home.png`) });
+  results.offlineFaceStatus = await pickAndOpen('offline');
+  await selectFilter(page, 'Neon Lines');
+  await waitReady(page);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, `${engine}-06-offline-neon.png`) });
+  log('OFFLINE: face filter applied');
+  results.offlineRequests = results.requests.slice(before).length;
+
+  await browser.close();
+  results.ok = results.foreignRequests.length === 0 && !(results.blocked || []).length;
+  results.shareApiPresentInPage = false;
+  fs.writeFileSync(path.join(outDir, `${engine}-results.json`), JSON.stringify(results, null, 1));
+  console.log(`total requests: ${results.requests.length}; cross-origin requests: ${results.foreignRequests.length}; blocked: ${(results.blocked || []).length}; console errors: ${results.consoleErrors.length}`);
+  for (const e of results.consoleErrors.slice(0, 10)) console.log('  console: ' + e.slice(0, 300));
+})().catch(async (e) => {
+  console.error('E2E FAILED:', e);
+  fs.writeFileSync(path.join(outDir, `${engine}-results.json`), JSON.stringify({ ...results, error: String(e) }, null, 1));
+  process.exit(1);
+});

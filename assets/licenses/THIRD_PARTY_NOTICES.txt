@@ -1,0 +1,27 @@
+Photo Effects - third-party notices
+
+This is an independent photo-effects app. It is not affiliated with, endorsed
+by, or connected to Snap Inc. or Snapchat. Effect names describe the look; all
+filter code, presets and artwork in this app are original. No Snapchat code,
+Lens files, textures, LUTs, shaders or branding are included.
+
+Bundled non-Dart components (full Apache-2.0 text is listed separately):
+
+1. MediaPipe Tasks Vision for Web (@mediapipe/tasks-vision 0.10.35)
+   Copyright The MediaPipe Authors. Licensed under the Apache License 2.0.
+   Files: web/mediapipe/vision_bundle.mjs, web/mediapipe/wasm/*
+   Used only by the web version, unmodified, served from this app.
+
+2. MediaPipe Face Landmarker model (face_landmarker.task, float16 v1)
+   Copyright Google LLC. Licensed under the Apache License 2.0.
+   See the MediaPipe Face Landmarker model card for intended use and limits.
+
+3. Roboto font (Regular, Medium, Bold)
+   Copyright Google LLC. Licensed under the Apache License 2.0.
+
+4. Face models inside face_detection_tflite (iOS build): MediaPipe-derived,
+   Apache License 2.0 (license shipped with the package and listed by Flutter).
+
+Dart/Flutter packages (image, image_picker, face_detection_tflite,
+flutter_litert, dartcv4/OpenCV, gal, web and their dependencies) are listed
+automatically below with their own licenses.
