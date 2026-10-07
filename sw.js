@@ -1,7 +1,7 @@
 // Offline service worker for Photo Effects.
 // The build script (tool/build_web.sh) replaces the two placeholders below
 // with a content hash and the list of every file in the build.
-const VERSION = "53aae017f91de6c8";
+const VERSION = "1b62c7ab99e817c0";
 const PRECACHE = [
  "assets/AssetManifest.bin",
  "assets/AssetManifest.bin.json",
