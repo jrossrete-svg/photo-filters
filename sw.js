@@ -1,7 +1,7 @@
 // Offline service worker for Photo Effects.
 // The build script (tool/build_web.sh) replaces the two placeholders below
 // with a content hash and the list of every file in the build.
-const VERSION = "729845647451bc3d";
+const VERSION = "53aae017f91de6c8";
 const PRECACHE = [
  "assets/AssetManifest.bin",
  "assets/AssetManifest.bin.json",
@@ -17,6 +17,7 @@ const PRECACHE = [
  "assets/shaders/stretch_effect.frag",
  "canvaskit/canvaskit.js",
  "canvaskit/canvaskit.wasm",
+ "custom_filter_store.js",
  "face_landmarker_bridge.js",
  "favicon.png",
  "filter_worker.js",
