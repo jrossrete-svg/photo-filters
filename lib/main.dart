@@ -2,13 +2,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'custom/custom_filter_library.dart';
 import 'rendering/image_pipeline.dart';
 import 'screens/gallery_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   _registerBundledLicenses();
-  runApp(PhotoEffectsApp(pipeline: ImagePipeline()));
+  runApp(
+    PhotoEffectsApp(pipeline: ImagePipeline(), library: CustomFilterLibrary()),
+  );
 }
 
 /// Adds notices for components that are not Dart packages (Flutter already
@@ -31,9 +34,14 @@ void _registerBundledLicenses() {
 }
 
 class PhotoEffectsApp extends StatelessWidget {
-  const PhotoEffectsApp({super.key, required this.pipeline});
+  const PhotoEffectsApp({
+    super.key,
+    required this.pipeline,
+    required this.library,
+  });
 
   final ImagePipeline pipeline;
+  final CustomFilterLibrary library;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +58,7 @@ class PhotoEffectsApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: theme(Brightness.light),
       darkTheme: theme(Brightness.dark),
-      home: GalleryScreen(pipeline: pipeline),
+      home: GalleryScreen(pipeline: pipeline, library: library),
     );
   }
 }

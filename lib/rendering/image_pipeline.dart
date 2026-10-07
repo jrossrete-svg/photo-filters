@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import '../custom/custom_filter.dart';
 import '../models/face_landmarks.dart';
 import '../models/filter_preset.dart';
 import '../models/local_image.dart';
@@ -114,7 +115,9 @@ class ImagePipeline {
     onStage?.call(ExportStage.encoding);
     return exporter.prepare(
       result.image,
-      baseName: 'photo-effect-$filterId'.replaceAll('_', '-'),
+      baseName: isCustomFilterId(filterId)
+          ? 'photo-effect-custom'
+          : 'photo-effect-$filterId'.replaceAll('_', '-'),
     );
   }
 

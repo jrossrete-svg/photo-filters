@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import '../models/local_image.dart';
 import 'local_export_service_stub.dart'
     if (dart.library.io) 'local_export_service_io.dart'
-    if (dart.library.js_interop) 'local_export_service_web.dart' as impl;
+    if (dart.library.js_interop) 'local_export_service_web.dart'
+    as impl;
 
 /// A finished JPEG, ready to be saved by the user.
 class PreparedExport {
@@ -16,7 +17,13 @@ class PreparedExport {
   final Future<ExportOutcome> Function() save;
 }
 
-enum ExportOutcome { savedToPhotos, shownForSaving, downloaded, savedToFiles, cancelled }
+enum ExportOutcome {
+  savedToPhotos,
+  shownForSaving,
+  downloaded,
+  savedToFiles,
+  cancelled,
+}
 
 /// Saves *new* files locally. Never touches the original photo and never
 /// sends anything anywhere: there is no share sheet and no network code.
@@ -27,10 +34,17 @@ enum ExportOutcome { savedToPhotos, shownForSaving, downloaded, savedToFiles, ca
 ///   "Save to Photos") plus a Download button (`<a download>` blob link).
 ///   Filter files are offered as downloads only.
 abstract class LocalExportService {
-  Future<PreparedExport> prepare(LocalImage image, {String baseName = 'photo-effect'});
+  Future<PreparedExport> prepare(
+    LocalImage image, {
+    String baseName = 'photo-effect',
+  });
 
   /// Saves an arbitrary small file (used for "Export filter").
-  Future<ExportOutcome> saveFile(Uint8List bytes, String fileName, String mimeType);
+  Future<ExportOutcome> saveFile(
+    Uint8List bytes,
+    String fileName,
+    String mimeType,
+  );
 
   static LocalExportService create() => impl.createExportService();
 }

@@ -1,3 +1,4 @@
+import '../custom/custom_filter_registry.dart';
 import 'glow_makeup_filter.dart';
 import 'light_filter.dart';
 import 'neon_lines_filter.dart';
@@ -19,7 +20,11 @@ const List<PhotoFilter> allFilters = [
   GlowMakeupFilter(),
 ];
 
-PhotoFilter filterById(String id) => allFilters.firstWhere(
-  (f) => f.id == id,
-  orElse: () => throw ArgumentError('Unknown filter $id'),
-);
+/// Built-in filter by id, or a user-made filter registered in
+/// [CustomFilterRegistry].
+PhotoFilter filterById(String id) =>
+    CustomFilterRegistry.lookup(id) ??
+    allFilters.firstWhere(
+      (f) => f.id == id,
+      orElse: () => throw ArgumentError('Unknown filter $id'),
+    );

@@ -12,7 +12,10 @@ LocalExportService createExportService() => _GalExportService();
 
 class _GalExportService implements LocalExportService {
   @override
-  Future<PreparedExport> prepare(LocalImage image, {String baseName = 'photo-effect'}) async {
+  Future<PreparedExport> prepare(
+    LocalImage image, {
+    String baseName = 'photo-effect',
+  }) async {
     final jpeg = await compute(_encodeJpeg, image);
     final name = exportFileName(baseName);
     return PreparedExport(
@@ -30,7 +33,11 @@ class _GalExportService implements LocalExportService {
   }
 
   @override
-  Future<ExportOutcome> saveFile(Uint8List bytes, String fileName, String mimeType) async {
+  Future<ExportOutcome> saveFile(
+    Uint8List bytes,
+    String fileName,
+    String mimeType,
+  ) async {
     // Visible in the Files app under "On My iPhone > Photo Effects"
     // (UIFileSharingEnabled + LSSupportsOpeningDocumentsInPlace in Info.plist).
     final dir = await getApplicationDocumentsDirectory();

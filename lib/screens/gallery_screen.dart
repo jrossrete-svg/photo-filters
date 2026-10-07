@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../custom/custom_filter_library.dart';
 import '../rendering/image_pipeline.dart';
 import '../services/image_decode_service.dart';
 import '../services/photo_picker_service.dart';
+import 'add_filter_flow.dart';
 import 'photo_editor_screen.dart';
 
 /// Start screen: choose a photo from the library. Browsing albums happens in
@@ -11,10 +13,12 @@ class GalleryScreen extends StatefulWidget {
   const GalleryScreen({
     super.key,
     required this.pipeline,
+    required this.library,
     PhotoPickerService? picker,
   }) : _picker = picker;
 
   final ImagePipeline pipeline;
+  final CustomFilterLibrary library;
   final PhotoPickerService? _picker;
 
   @override
@@ -31,6 +35,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   void initState() {
     super.initState();
     widget.pipeline.warmUp();
+    widget.library.load();
   }
 
   Future<void> _pick() async {
@@ -43,8 +48,11 @@ class _GalleryScreenState extends State<GalleryScreen> {
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) =>
-              PhotoEditorScreen(session: session, pipeline: widget.pipeline),
+          builder: (_) => PhotoEditorScreen(
+            session: session,
+            pipeline: widget.pipeline,
+            library: widget.library,
+          ),
         ),
       );
     } on UnsupportedPhotoException catch (e) {
@@ -99,7 +107,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'Seven effects: Sunny Effect, Soft Freckles, Neon Lines, Light, '
-                    'Rosy Haze, SERUM and Glow Effect with Makeup.',
+                    'Rosy Haze, SERUM and Glow Effect with Makeup, plus your own '
+                    'filter files.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium,
                   ),
@@ -132,7 +141,24 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       style: TextStyle(color: theme.colorScheme.error),
                     ),
                   ],
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    key: const ValueKey('home-add-filter'),
+                    onPressed: () =>
+                        showAddFilterSheet(context, widget.library),
+                    icon: const Icon(Icons.tune),
+                    label: const Text('Add your own filter'),
+                  ),
+                  ListenableBuilder(
+                    listenable: widget.library,
+                    builder: (context, _) => widget.library.filters.isEmpty
+                        ? const SizedBox.shrink()
+                        : Text(
+                            '${widget.library.filters.length} of your own filter(s) saved on this device',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                  ),
+                  const SizedBox(height: 24),
                   Row(
                     children: [
                       Icon(

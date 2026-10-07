@@ -9,6 +9,7 @@ import 'dart:js_interop_unsafe';
 
 import 'package:web/web.dart' as web;
 
+import '../custom/custom_filter_registry.dart';
 import '../filters/filter_registry.dart';
 import '../models/face_landmarks.dart';
 import '../models/filter_preset.dart';
@@ -20,6 +21,14 @@ void main() {
     final msg = event.data as JSObject;
     final id = msg['id'];
     try {
+      final customJson = msg['customJson'];
+      if (customJson != null) {
+        // Re-validated here with the same strict parser.
+        CustomFilterRegistry.registerJson(
+          (msg['filterId'] as JSString).toDart,
+          (customJson as JSString).toDart,
+        );
+      }
       final source = LocalImage(
         (msg['width'] as JSNumber).toDartInt,
         (msg['height'] as JSNumber).toDartInt,

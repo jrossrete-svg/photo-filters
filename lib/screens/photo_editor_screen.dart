@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../custom/custom_filter.dart';
+import '../custom/custom_filter_library.dart';
 import '../filters/filter_registry.dart';
 import '../filters/photo_filter.dart';
 import '../models/filter_preset.dart';
@@ -12,6 +14,7 @@ import '../services/local_export_service.dart';
 import '../widgets/before_after_view.dart';
 import '../widgets/filter_selector.dart';
 import '../widgets/intensity_slider.dart';
+import 'add_filter_flow.dart';
 
 /// Preview a filter on the chosen photo, adjust it, and export a new copy.
 class PhotoEditorScreen extends StatefulWidget {
@@ -19,10 +22,12 @@ class PhotoEditorScreen extends StatefulWidget {
     super.key,
     required this.session,
     required this.pipeline,
+    required this.library,
   });
 
   final EditSession session;
   final ImagePipeline pipeline;
+  final CustomFilterLibrary library;
 
   @override
   State<PhotoEditorScreen> createState() => _PhotoEditorScreenState();
@@ -32,20 +37,85 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
   ui.Image? _original;
   ui.Image? _edited;
   String _filterId = allFilters.first.id;
-  final Map<String, FilterSettings> _settings = {
-    for (final f in allFilters) f.id: f.preset.defaultSettings(),
-  };
+  final Map<String, FilterSettings> _settings = {};
   bool _busy = false;
   bool _rerunQueued = false;
   String? _note;
   bool _exporting = false;
 
   PhotoFilter get _filter => filterById(_filterId);
-  FilterSettings get _current => _settings[_filterId]!;
+  FilterSettings get _current =>
+      _settings.putIfAbsent(_filterId, () => _filter.preset.defaultSettings());
+
+  List<PhotoFilter> get _allFilters => [
+    ...allFilters,
+    ...widget.library.filters,
+  ];
+
+  void _libraryChanged() {
+    if (!mounted) return;
+    if (isCustomFilterId(_filterId) &&
+        !widget.library.filters.any((f) => f.id == _filterId)) {
+      _filterId = allFilters.first.id;
+      _render();
+    }
+    setState(() {});
+  }
+
+  Future<void> _addFilter() async {
+    final added = await showAddFilterSheet(context, widget.library);
+    if (added != null && mounted) _select(added.id);
+  }
+
+  void _exportFilter() {
+    try {
+      final (bytes, name) = widget.library.exportFile(_filterId);
+      // Download only (no share sheet).
+      widget.pipeline.exporter.saveFile(bytes, name, 'application/json').then((
+        outcome,
+      ) {
+        if (mounted) {
+          _snack(
+            kIsWeb
+                ? 'Downloaded $name'
+                : 'Saved $name to the app\'s folder in Files.',
+          );
+        }
+      });
+    } catch (e) {
+      _snack('Could not export this filter.');
+    }
+  }
+
+  Future<void> _deleteFilter() async {
+    final name = _filter.displayName;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete filter?'),
+        content: Text('"$name" will be removed from this device.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-delete-filter'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await widget.library.delete(_filterId);
+    if (mounted) _snack('Deleted "$name".');
+  }
 
   @override
   void initState() {
     super.initState();
+    widget.library.addListener(_libraryChanged);
     toUiImage(widget.session.preview).then((img) {
       if (!mounted) return;
       setState(() => _original = img);
@@ -55,6 +125,7 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
 
   @override
   void dispose() {
+    widget.library.removeListener(_libraryChanged);
     _original?.dispose();
     _edited?.dispose();
     super.dispose();
@@ -171,7 +242,10 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Your edited copy is ready', style: Theme.of(ctx).textTheme.titleMedium),
+              Text(
+                'Your edited copy is ready',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
               const SizedBox(height: 4),
               Text(
                 'A new photo will be added to your library. The original stays unchanged.',
@@ -182,7 +256,8 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
                 key: const ValueKey('save-copy'),
                 icon: const Icon(Icons.save_alt),
                 label: const Text('Save to Photos'),
-                onPressed: () async => Navigator.of(ctx).pop(await prepared.save()),
+                onPressed: () async =>
+                    Navigator.of(ctx).pop(await prepared.save()),
               ),
             ],
           ),
@@ -190,7 +265,11 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
       ),
     );
     if (!mounted || outcome == null) return;
-    _snack(outcome == ExportOutcome.savedToPhotos ? 'Saved a new copy to Photos.' : 'Not saved.');
+    _snack(
+      outcome == ExportOutcome.savedToPhotos
+          ? 'Saved a new copy to Photos.'
+          : 'Not saved.',
+    );
   }
 
   void _snack(String text) =>
@@ -270,11 +349,31 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
                     render: true,
                   ),
                 ),
+            if (isCustomFilterId(_filterId))
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton.icon(
+                    key: const ValueKey('export-filter'),
+                    onPressed: _exportFilter,
+                    icon: const Icon(Icons.file_download_outlined),
+                    label: const Text('Export filter'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    key: const ValueKey('delete-filter'),
+                    onPressed: _deleteFilter,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete filter'),
+                  ),
+                ],
+              ),
             const SizedBox(height: 4),
             FilterSelector(
-              filters: allFilters,
+              filters: _allFilters,
               selectedId: _filterId,
               onSelected: _select,
+              onAdd: _addFilter,
             ),
             const SizedBox(height: 8),
           ],

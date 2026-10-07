@@ -5,6 +5,8 @@ import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
 
+import '../custom/custom_filter.dart';
+import '../custom/custom_filter_registry.dart';
 import '../models/face_landmarks.dart';
 import '../models/filter_preset.dart';
 import '../models/local_image.dart';
@@ -22,6 +24,9 @@ class _WorkerFilterRunner implements FilterRunner {
   final _pending = <int, Completer<ProcessedImage>>{};
   final _inline = InlineFilterRunner();
 
+  /// Custom filters whose JSON the current worker already has.
+  final _sentCustom = <String>{};
+
   web.Worker? _ensureWorker() {
     if (_workerBroken) return null;
     if (_worker != null) return _worker;
@@ -35,6 +40,7 @@ class _WorkerFilterRunner implements FilterRunner {
         e.preventDefault();
         _failAll('Background worker error');
       }).toJS;
+      _sentCustom.clear();
       return _worker = w;
     } catch (_) {
       _workerBroken = true;
@@ -105,6 +111,13 @@ class _WorkerFilterRunner implements FilterRunner {
       ..['pixels'] = Uint8List.fromList(source.rgba).toJS
       ..['landmarks'] = (landmarks?.encode() ?? '[]').toJS
       ..['settings'] = settings.encode().toJS;
+    if (isCustomFilterId(filterId) && !_sentCustom.contains(filterId)) {
+      final json = CustomFilterRegistry.jsonOf(filterId);
+      if (json != null) {
+        msg['customJson'] = json.toJS;
+        _sentCustom.add(filterId);
+      }
+    }
     worker.postMessage(msg);
     try {
       return await c.future;

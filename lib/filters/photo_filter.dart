@@ -36,10 +36,14 @@ abstract class PhotoFilter {
     if (t > 0) render(img, faces, settings, t);
     String? note;
     if (preset.usesFace && faces.isEmpty) {
-      note = 'No face found, so only the overall look was applied.';
+      note = noFaceNote;
     }
     return ProcessedImage(img.toLocal(), usedFaces: faces.length, note: note);
   }
+
+  /// Shown when a face-aware filter runs on a photo without faces.
+  String get noFaceNote =>
+      'No face found, so only the overall look was applied.';
 
   /// Implemented by each filter. [t] is the clamped intensity (> 0).
   void render(

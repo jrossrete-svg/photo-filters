@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../custom/custom_filter_registry.dart';
 import '../filters/filter_registry.dart';
 import '../models/face_landmarks.dart';
 import '../models/filter_preset.dart';
@@ -20,14 +21,18 @@ class _IsolateFilterRunner implements FilterRunner {
     source,
     landmarks?.encode(),
     settings.encode(),
+    CustomFilterRegistry.jsonOf(filterId),
   ));
 
   @override
   void dispose() {}
 }
 
-ProcessedImage _runInIsolate((String, LocalImage, String?, String) args) {
-  final (id, source, lm, settings) = args;
+ProcessedImage _runInIsolate(
+  (String, LocalImage, String?, String, String?) args,
+) {
+  final (id, source, lm, settings, customJson) = args;
+  if (customJson != null) CustomFilterRegistry.registerJson(id, customJson);
   return filterById(id).applySync(
     source: source,
     landmarks: lm == null ? null : FaceLandmarks.decode(lm),

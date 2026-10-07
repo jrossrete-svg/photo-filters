@@ -8,6 +8,9 @@ technically blocked from contacting any other website (see *Privacy*).
 
 **Live web app:** https://jrossrete-svg.github.io/photo-filters/
 
+The seven built-in filters are listed below. You can also add your own (see
+*How to add your own filter*).
+
 | Filter | What it does |
 | --- | --- |
 | Sunny Effect | Warm golden-hour grade, soft sun flare from a corner, warm bloom. Works on any photo. |
@@ -47,6 +50,80 @@ Notes and limits:
 * EXIF orientation is applied, and location/camera metadata is not copied to
   the saved photo.
 
+## How to add your own filter
+
+Besides the seven built-in looks you can add your own **filter files**. They
+are checked by the app and saved only in this browser on this device
+(IndexedDB; on the native iOS app, in the app's private folder). Nothing is
+uploaded, and photos are never accepted as filter files.
+
+1. Open a photo, scroll the filter bar to the end and tap **Add filter file**
+   (or tap **Add your own filter** on the start screen). A short help sheet
+   explains the options.
+2. Tap **Choose filter file** and pick the file (for example from the Files
+   app).
+3. The new filter appears at the end of the filter bar. Use **Intensity** as
+   usual. With your own filter selected you can tap **Export filter**
+   (downloads a `.json` file, no share sheet) or **Delete filter**.
+
+Accepted files:
+
+| File | Becomes |
+| --- | --- |
+| `.cube` (3D LUT, 2 to 65 points per axis) | A colour look, blended in by the Intensity slider. |
+| `.png` with a transparent background | You choose: **Overlay** (covers the whole photo; blend mode normal / screen / multiply / overlay / soft light, plus opacity) or **Face sticker** (placed on the whole face, eyes, nose, mouth or forehead; scaled and rotated with each face). |
+| `.json` Photo Effects preset | Any combination of a colour look, an overlay and a sticker, with a name. This is what **Export filter** produces. |
+
+Safety rules (enforced in `lib/custom/`):
+* Max 5 MB per file; at most 30 of your own filters.
+* The type is checked from the file's content, not just its name. JPEG,
+  HEIC, WebP and GIF files are refused, even if renamed.
+* PNGs must have an alpha channel with real transparency. Fully (or almost
+  fully) opaque images, such as ordinary pictures or screenshots, are
+  refused. Absurdly large PNGs are refused before decoding. Accepted PNGs are
+  shrunk to at most 2048 px and re-encoded, which drops all metadata.
+* `.cube` files are parsed strictly: only TITLE, LUT_3D_SIZE, DOMAIN_MIN,
+  DOMAIN_MAX, comments and the exact number of numeric rows.
+* JSON presets follow a strict schema and unknown fields are rejected, so
+  there is nothing executable. Images must be embedded as
+  `data:image/png;base64,...`, and links/URLs are rejected. Nothing is ever
+  fetched.
+* Names are cleaned (control, invisible and text-direction characters
+  removed), limited to 40 characters, and only ever shown as plain text.
+* Stored filters are validated again whenever they are loaded.
+
+Preset format (`version` 1):
+
+```json
+{
+  "format": "photo-effects-filter",
+  "version": 1,
+  "name": "Heart Glasses",
+  "lut":     { "cube": "LUT_3D_SIZE 2\n0 0 0\n..." },
+  "overlay": { "image": "data:image/png;base64,...", "blend": "screen", "opacity": 0.8 },
+  "sticker": { "image": "data:image/png;base64,...", "anchor": "eyes", "scale": 1.25, "offsetY": 0, "opacity": 1 }
+}
+```
+
+Each of `lut`, `overlay` and `sticker` is optional, but at least one is
+required. `lut` may also be `{ "size": N, "rgb16": "<base64>" }`, the compact
+form used by Export. `blend` is one of `normal`, `screen`, `multiply`,
+`overlay` or `soft-light`. `anchor` is one of `face`, `eyes`, `nose`, `mouth`
+or `forehead`. `scale` ranges from 0.2 to 3, `offsetY` from -1 to 1 (in
+sticker heights, positive moves up the face), and `opacity` from 0 to 1.
+
+Sample filter files (original, made by `tool/make_sample_filters.py`, CC0) are
+in `samples/filters/`:
+* `warm-film.cube`: warm, softly faded film colour look (33³).
+* `golden-light-leak.png`: transparent golden/pink light leak overlay (try
+  *Screen*).
+* `heart-glasses-sticker.json`: heart-shaped sunglasses sticker on the eyes
+  plus a light rosy tint.
+
+Storage note: Safari can clear a website's stored data if the site isn't used
+for a while. Filters are safest when the app is added to the Home Screen.
+Keep your filter files (or use **Export filter**) if you want a backup.
+
 ## Privacy (how "no uploads" is enforced)
 
 * `web/index.html` has a strict Content-Security-Policy:
@@ -56,7 +133,8 @@ Notes and limits:
   run the bundled WebAssembly (CanvasKit renderer and MediaPipe face
   landmarks); `style-src 'unsafe-inline'` only allows inline CSS styling.
 * The app contains no `fetch`/XHR/beacon/WebSocket/form code of its own. Picked
-  photos are read in memory with `File.arrayBuffer()`.
+  photos and filter files are read in memory with `File.arrayBuffer()`. Your
+  own filters are stored in IndexedDB on the device.
 * There is no Web Share (share sheet) path. Saving uses the long-press menu or
   an `<a download>` link to a local `blob:` URL.
 * Everything (Flutter engine, CanvasKit, fonts, MediaPipe wasm + model) is
@@ -68,7 +146,10 @@ Notes and limits:
   (1.0.x/1.1.x) include a telemetry call to a Google logging endpoint.
 * The end-to-end test (`tool/e2e/web_e2e.cjs`) aborts and counts every
   request that is not same-origin/blob/data and logs CSP violations during a
-  full open, edit, save and download session; it must report 0.
+  full session (open a photo, apply all filters, add/export/delete your own
+  filters, save and download, then go offline and reload). It also wraps
+  `navigator.share`, `sendBeacon`, `fetch`, XHR, WebSocket and form submits
+  in the page to record any use, and it must report 0 non-local uses.
 
 ## Design decisions
 
@@ -94,11 +175,15 @@ lib/
   filters/     PhotoFilter interface + the 7 filters + registry
   rendering/   pure-Dart pixel pipeline: masks, blend modes, grading, effects, makeup,
                filter runner (Web Worker on web, isolate on iOS), image pipeline
+  custom/      your own filters: .cube LUT parser, transparent-PNG checks, preset JSON
+               schema, renderer (LUT, overlay, face sticker), local storage
   services/    decode (EXIF orientation), face landmarks (MediaPipe web / TFLite iOS),
-               photo picking, local export
+               photo + filter-file picking, local export
   screens/ widgets/  Flutter UI
   worker/      Web Worker entry point (compiled with dart2js)
-web/           index.html (CSP), sw.js, manifest, icons, MediaPipe bridge + bundled files
+web/           index.html (CSP), sw.js, manifest, icons, MediaPipe bridge + bundled files,
+               custom_filter_store.js (IndexedDB)
+samples/filters/  sample filter files
 ios/           Xcode project
 test/          unit tests with synthetic landmarks
 tool/          build_web.sh, precache list writer, preview renderer, Playwright e2e

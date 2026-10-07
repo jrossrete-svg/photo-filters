@@ -7,7 +7,10 @@ import 'package:web/web.dart' as web;
 /// Opens the browser's file chooser and reads the chosen file locally with
 /// `File.arrayBuffer()` (no fetch, no network; works under `connect-src 'self'`).
 /// Must be called synchronously from a tap so Safari allows the chooser.
-Future<(Uint8List, String)?> pickLocalFile({String? accept}) {
+/// Thrown when the chosen file is bigger than `maxBytes` (it is not read).
+class FileTooLargeException implements Exception {}
+
+Future<(Uint8List, String)?> pickLocalFile({String? accept, int? maxBytes}) {
   final completer = Completer<(Uint8List, String)?>();
   final input = web.HTMLInputElement()..type = 'file';
   if (accept != null) input.accept = accept;
@@ -22,6 +25,13 @@ Future<(Uint8List, String)?> pickLocalFile({String? accept}) {
     final files = input.files;
     if (files == null || files.length == 0) return finish(null);
     final file = files.item(0)!;
+    if (maxBytes != null && file.size > maxBytes) {
+      if (!completer.isCompleted) {
+        completer.completeError(FileTooLargeException());
+      }
+      input.remove();
+      return;
+    }
     try {
       final buffer = await file.arrayBuffer().toDart;
       finish((buffer.toDart.asUint8List(), file.name));
