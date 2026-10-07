@@ -5,12 +5,14 @@ import 'neon_lines_filter.dart';
 import 'photo_filter.dart';
 import 'rosy_haze_filter.dart';
 import 'serum_filter.dart';
+import 'soft_glam_filter.dart';
 import 'soft_freckles_filter.dart';
 import 'sunny_effect_filter.dart';
 
 /// All filter modules, in the order shown in the app. Adding a filter only
 /// requires adding it here.
 const List<PhotoFilter> allFilters = [
+  SoftGlamFilter(),
   SunnyEffectFilter(),
   SoftFrecklesFilter(),
   NeonLinesFilter(),

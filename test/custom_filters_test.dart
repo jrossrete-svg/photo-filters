@@ -573,7 +573,7 @@ void main() {
       final f = await lib.add(lutSpec('Warm'));
       expect(isCustomFilterId(f.id), isTrue);
       expect(filterById(f.id).displayName, 'Warm');
-      expect(allFilters.length, 7, reason: 'built-ins stay as they are');
+      expect(allFilters.length, 8, reason: 'built-ins stay as they are');
 
       final (bytes, name) = lib.exportFile(f.id);
       expect(name, 'warm-filter.json');

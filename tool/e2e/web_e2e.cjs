@@ -6,7 +6,7 @@ const path = require('path');
 
 const [url, photo, outDir, engine = 'chromium'] = process.argv.slice(2);
 const SAMPLES = path.join(__dirname, '..', '..', 'samples', 'filters');
-const FILTERS = ['Sunny Effect', 'Soft Freckles', 'Neon Lines', 'Light', 'Rosy Haze', 'SERUM', 'Glow Effect with Makeup'];
+const FILTERS = ['Soft Glam', 'Sunny Effect', 'Soft Freckles', 'Neon Lines', 'Light', 'Rosy Haze', 'SERUM', 'Glow Effect with Makeup'];
 fs.mkdirSync(outDir, { recursive: true });
 const results = { engine, url, steps: [], filters: {}, requests: [], foreignRequests: [], consoleErrors: [] };
 let PAGE = null;
@@ -150,13 +150,17 @@ async function waitReady(page, timeout = 180000) {
   for (const [i, name] of FILTERS.entries()) {
     t0 = Date.now();
     if (i > 0) await selectFilter(page, name);
+    const tSel = Date.now();
     await waitReady(page);
-    const ms = Date.now() - t0;
+    // Time from the tap being registered to "Preview ready" (excludes
+    // scrolling the filter bar in the test).
+    const ms = Date.now() - tSel;
+    const selectMs = tSel - t0;
     await page.waitForTimeout(300);
     const shot = path.join(outDir, `${engine}-02-filter-${i + 1}-${name.replace(/\W+/g, '_')}.png`);
     await page.screenshot({ path: shot });
-    results.filters[name] = { ms, screenshot: shot };
-    log(`filter "${name}" rendered in ${ms} ms`);
+    results.filters[name] = { ms, selectMs, screenshot: shot };
+    log(`filter "${name}" rendered in ${ms} ms (selecting the tile took ${selectMs} ms)`);
   }
 
   // Before/after: drag the divider to the middle.
@@ -167,6 +171,36 @@ async function waitReady(page, timeout = 180000) {
     await page.screenshot({ path: path.join(outDir, `${engine}-03-before-after.png`) });
   }
 
+
+  // ---- Soft Glam: full-size export timing (face retouch + reshape at 2048 px).
+  async function saveCurrent(tag) {
+    const t = Date.now();
+    await page.getByRole('button', { name: /^Save/ }).first().click({ force: true });
+    await page.waitForSelector('#save-overlay img', { timeout: 180000 });
+    await page.waitForFunction(() => document.querySelector('#save-overlay img').complete);
+    const ms = Date.now() - t;
+    const info = await page.evaluate(() => {
+      const img = document.querySelector('#save-overlay img');
+      return { w: img.naturalWidth, h: img.naturalHeight };
+    });
+    await page.screenshot({ path: path.join(outDir, `${engine}-04-save-view-${tag}.png`) });
+    const [dl] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }).catch(() => null),
+      page.locator('#save-overlay a[download]').click(),
+    ]);
+    let file = null;
+    if (dl) {
+      file = path.join(outDir, `${engine}-export-${tag}-${dl.suggestedFilename()}`);
+      await dl.saveAs(file);
+    }
+    await page.locator('#save-overlay button').click();
+    await page.waitForTimeout(500);
+    return { ms, ...info, file };
+  }
+  await selectFilter(page, 'Soft Glam');
+  await waitReady(page);
+  results.softGlamSave = await saveCurrent('soft-glam');
+  log(`Soft Glam full-size save: ${JSON.stringify(results.softGlamSave)}`);
 
   // ---- Your own filters: add (.cube, .json, .png), reject a photo, export, delete.
   async function addFilterFile(file, { png = false, expectError = false } = {}) {
@@ -303,6 +337,12 @@ async function waitReady(page, timeout = 180000) {
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(outDir, `${engine}-06-offline-neon.png`) });
   log('OFFLINE: face filter applied');
+  t0 = Date.now();
+  await selectFilter(page, 'Soft Glam');
+  await waitReady(page);
+  log(`OFFLINE: Soft Glam rendered in ${Date.now() - t0} ms`);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(outDir, `${engine}-06-offline-soft-glam.png`) });
   await selectFilter(page, 'Heart Glasses');
   await waitReady(page);
   await page.waitForTimeout(300);

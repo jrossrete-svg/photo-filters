@@ -1,18 +1,19 @@
 # Photo Effects
 
 Private photo filters that run entirely on your device. Pick a photo, choose
-one of seven looks, adjust the strength, compare before/after, and save a new
+one of eight looks, adjust the strength, compare before/after, and save a new
 copy. Your original photo is never changed, and no photo ever leaves the
 device: there is no server, no account, no analytics, and the web app is
 technically blocked from contacting any other website (see *Privacy*).
 
 **Live web app:** https://jrossrete-svg.github.io/photo-filters/
 
-The seven built-in filters are listed below. You can also add your own (see
+The built-in filters are listed below. You can also add your own (see
 *How to add your own filter*).
 
 | Filter | What it does |
 | --- | --- |
+| Soft Glam | A real face retouch, not just a colour grade: strong edge-preserving skin smoothing, even and brighter skin tone, under-eye brightening, brighter eyes (optionally lighter grey-green irises), soft lash line, softened brows, smoothed nude-pink lips, and a subtle reshape (slimmer jaw, narrower nose, slightly larger/more open eyes, fuller lips). Sliders: Intensity, Smooth, Slim, Eyes, plus a *Lighter eye colour* switch. See *Soft Glam* below. |
 | Sunny Effect | Warm golden-hour grade, soft sun flare from a corner, warm bloom. Works on any photo. |
 | Soft Freckles | Natural-looking freckles across the nose and cheeks (deterministic pattern), light warmth and smoothing. Density control. |
 | Neon Lines | Glowing magenta/cyan lines traced along the face outline, eyes, brows, nose and lips. Without a face it outlines the strongest edges instead. |
@@ -22,7 +23,44 @@ The seven built-in filters are listed below. You can also add your own (see
 | Glow Effect with Makeup | Eyeshadow, liner, mascara, brows, blush, berry lips and highlight, with a soft glow. |
 
 Every face filter still works when no face is found: it applies only the
-overall colour/light look and says so on screen.
+overall colour/light look and says so on screen. Soft Glam only retouches
+faces, so without a face it leaves the photo unchanged and says so.
+
+## Soft Glam (face retouch and reshape)
+
+Soft Glam is an original beauty-camera style look built from two reusable
+modules in `lib/rendering/`:
+
+* **`skin_retouch.dart`**: a skin mask from the face landmarks (face oval
+  minus eyes, brows, lips and nostrils, feathered, then refined by a
+  skin-colour model so hair and glasses are left alone); edge-preserving
+  smoothing with a guided filter (computed at a face-relative resolution, so
+  it is fast and looks the same at preview and export size) with a little
+  pore-level texture added back; tone evening (redness and blotches pulled
+  towards the surrounding skin colour, shadows and dark spots lifted);
+  under-eye brightening towards the cheek colour; and a skin-tone adjustment
+  that is *relative and capped* (at most a few Lab units towards a
+  warm-neutral tone, plus a small lift), so every skin tone keeps its own
+  depth. The tone change is applied to all visible skin (face, neck,
+  shoulders) by colour similarity, so there is no edge where the face ends.
+* **`face_warp.dart`**: a landmark-driven reshape. Each change is a smooth,
+  local displacement term (jaw/cheek slimming towards the facial midline,
+  nose narrowing, eye enlarging plus an upper-lid lift, lip plumping), each
+  with its own strength. All terms are fold-free for the strengths used (the
+  unit tests check the warp's Jacobian stays positive, so it cannot tear or
+  flip), are exactly zero away from the face, and the reshape runs last so all
+  retouching moves with the face. The jaw change fades out over a band just
+  outside the jaw line; a straight line in the background *right next to* the
+  jaw can bend slightly at high Slim values.
+* **`feature_retouch.dart`**: whiter eye whites, lighter irises (keeping the
+  pupil, a darker limbal ring and the catchlights), softened brows, and lip
+  smoothing with a relative nude-pink tint.
+
+It was tuned against a real before/after of a popular beauty lens (used only
+locally for comparison, never committed), with `tool/soft_glam_compare.dart`.
+Typical speed on the Dart VM (desktop): about 0.35 s at preview size
+(1080 px) and 0.85 s at export size (2048 px); in the browser see the
+timings reported by the e2e test.
 
 ## Using it on iPhone (no Mac, no Apple account, free)
 
@@ -52,7 +90,7 @@ Notes and limits:
 
 ## How to add your own filter
 
-Besides the seven built-in looks you can add your own **filter files**. They
+Besides the eight built-in looks you can add your own **filter files**. They
 are checked by the app and saved only in this browser on this device
 (IndexedDB; on the native iOS app, in the app's private folder). Nothing is
 uploaded, and photos are never accepted as filter files.
@@ -172,8 +210,9 @@ Keep your filter files (or use **Export filter**) if you want a backup.
 ```
 lib/
   models/      LocalImage, FaceLandmarks (468/478-point mesh, normalized), FilterSettings
-  filters/     PhotoFilter interface + the 7 filters + registry
+  filters/     PhotoFilter interface + the 8 filters + registry
   rendering/   pure-Dart pixel pipeline: masks, blend modes, grading, effects, makeup,
+               skin retouch, face reshape (warp), eye/brow/lip retouch,
                filter runner (Web Worker on web, isolate on iOS), image pipeline
   custom/      your own filters: .cube LUT parser, transparent-PNG checks, preset JSON
                schema, renderer (LUT, overlay, face sticker), local storage
@@ -186,7 +225,8 @@ web/           index.html (CSP), sw.js, manifest, icons, MediaPipe bridge + bund
 samples/filters/  sample filter files
 ios/           Xcode project
 test/          unit tests with synthetic landmarks
-tool/          build_web.sh, precache list writer, preview renderer, Playwright e2e
+tool/          build_web.sh, precache list writer, preview renderer, Soft Glam
+               comparison/timing tool, Playwright e2e
 ```
 
 The filter interface is

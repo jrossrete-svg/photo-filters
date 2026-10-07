@@ -106,9 +106,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Seven effects: Sunny Effect, Soft Freckles, Neon Lines, Light, '
-                    'Rosy Haze, SERUM and Glow Effect with Makeup, plus your own '
-                    'filter files.',
+                    'Eight effects: Soft Glam, Sunny Effect, Soft Freckles, Neon '
+                    'Lines, Light, Rosy Haze, SERUM and Glow Effect with Makeup, '
+                    'plus your own filter files.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium,
                   ),

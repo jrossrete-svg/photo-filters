@@ -37,9 +37,10 @@ void main() {
   final photo = syntheticPortrait(w, h, frontal);
 
   test(
-    'there are exactly seven filters with unique ids and the planned names',
+    'there are the seven planned filters plus Soft Glam, with unique ids',
     () {
       expect(allFilters.map((f) => f.displayName), [
+        'Soft Glam',
         'Sunny Effect',
         'Soft Freckles',
         'Neon Lines',
@@ -48,7 +49,7 @@ void main() {
         'SERUM',
         'Glow Effect with Makeup',
       ]);
-      expect(allFilters.map((f) => f.id).toSet().length, 7);
+      expect(allFilters.map((f) => f.id).toSet().length, 8);
     },
   );
 
